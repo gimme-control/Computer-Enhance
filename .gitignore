@@ -7,8 +7,3 @@
 
 # Executable files
 *.exe
-
-# Binary files (common examples, you might need to add more)
-*.bin
-*.o
-*.obj
