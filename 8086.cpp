@@ -3,6 +3,49 @@
 #include <vector>
 #include <iterator>
 #include <unordered_map>
+// #include <bitset>
+
+std::unordered_map<unsigned char, std::string> reg_opcode =
+{
+    {0b100010, "mov"}, 
+    {0b1011, "mov"}, 
+    {0b1100011, "mov"}, 
+}; 
+
+std::unordered_map<unsigned char, std::string> reg_map = 
+{
+    {0b0000, "al"},
+    {0b0001, "ax"},
+    {0b0010, "cl"},
+    {0b0011, "cx"},
+    {0b0100, "dl"},
+    {0b0101, "dx"},
+    {0b0110, "bl"},
+    {0b0111, "bx"},
+    {0b1000, "ah"},
+    {0b1001, "sp"},
+    {0b1010, "ch"},
+    {0b1011, "bp"},
+    {0b1100, "dh"},
+    {0b1101, "si"},
+    {0b1110, "bh"},
+    {0b1111, "di"},
+}; 
+
+struct instruction {
+        unsigned char opcode = 0; 
+        int direction = 0;  
+        int wordSize = 0;  
+        unsigned char mod = 0;
+        unsigned char reg = 0;  
+        unsigned char rm = 0;  
+
+        unsigned char lowDisp = 0;  
+        unsigned char highDisp = 0;  
+
+        unsigned char lowData = 0;  
+        unsigned char highData = 0; 
+}; 
 
 // File opener
 std::vector<unsigned char> getFile(std::string fileName)
@@ -22,104 +65,160 @@ unsigned char extractBits(unsigned char curr, int startBit, int endBit)
     return (curr & mask) >> endBit; 
 }
 
-struct instruction {
-        unsigned char opcode; 
-        int direction; 
-        int wordSize; 
-        unsigned char mod; 
-        unsigned char reg; 
-        unsigned char rm; 
-}; 
-
 instruction decodeInstruction(std::vector<unsigned char>& buffer, int byteIndex)
 {
     instruction decoded; 
 
     unsigned char currByte = buffer[byteIndex]; 
 
-    decoded.opcode = extractBits(currByte, 7, 2); 
-    decoded.direction = extractBits(currByte, 1, 1); 
-    decoded.wordSize = extractBits(currByte, 0, 0); 
+    if(extractBits(currByte, 7, 4) == 0b1011)
+    {
+        decoded.opcode = 0b1011;
+        decoded.wordSize = extractBits(currByte, 3, 3);
+        decoded.reg = extractBits(currByte, 2, 0);
+        
+        ++byteIndex; 
 
-    byteIndex++; 
-    currByte = buffer[byteIndex]; 
-    decoded.mod = extractBits(currByte, 7, 6); 
-    decoded.reg = extractBits(currByte, 5, 3); 
-    decoded.rm = extractBits(currByte, 2, 0); 
+        currByte = buffer[byteIndex]; 
+        decoded.lowData = extractBits(currByte, 7, 0);
+
+        if(decoded.wordSize)
+        {
+            ++byteIndex; 
+            currByte = buffer[byteIndex];
+            decoded.highData = extractBits(currByte, 7, 0);
+        }
+    }
+
+    else
+    {
+        decoded.opcode = extractBits(currByte, 7, 2); 
+        decoded.direction = extractBits(currByte, 1, 1); 
+        decoded.wordSize = extractBits(currByte, 0, 0); 
+
+        byteIndex++; 
+        currByte = buffer[byteIndex]; 
+        decoded.mod = extractBits(currByte, 7, 6); 
+        decoded.reg = extractBits(currByte, 5, 3); 
+        decoded.rm = extractBits(currByte, 2, 0); 
+    }
 
     return decoded; 
 }
 
-
-
-int main()
+void decodeAdditional(std::vector<unsigned char>& buffer, instruction &decoded, 
+        int index, int disp, int data) 
 {
+    if(disp)
+    {
+        unsigned char currByte = buffer[index];
+        decoded.lowDisp = extractBits(currByte, 7, 0);
 
-    std::vector<unsigned char> buffer = getFile("manymov.bin"); 
-    
-    std::vector<instruction> all_instructions;  
+        if(disp == 2)
+        {
+            ++index; 
+            currByte = buffer[index]; 
+            decoded.highDisp = extractBits(currByte, 7, 0);
+        }
+    }
+
+    index += disp; 
+
+    if(data)
+    {
+        unsigned char currByte = buffer[index];
+        decoded.highData = extractBits(currByte, 7, 0);
+        if(data == 2)
+        {
+            decoded.lowData = extractBits(currByte, 7, 0);
+            ++index; 
+            currByte= buffer[index];
+            decoded.highData = extractBits(currByte, 7, 0);
+        }
+    }
+}
+
+std::vector<instruction> getInstructions(std::vector<unsigned char> buffer)
+{
+    std::vector<instruction> ins; 
 
     for(int i = 0; i < buffer.size(); i += 2)
     {
-        instruction decoded = decodeInstruction(buffer, i); 
-        // std::cout << std::bitset<6>(decoded.opcode) << decoded.direction << decoded.wordSize << std::bitset<2>(decoded.mod)<< std::bitset<3>(decoded.reg) << 
-        //  std::bitset<3>(decoded.rm) << '\n'; 
-        all_instructions.push_back(decoded); 
-    }
+        int disp = 0; 
+        int data = 0; 
 
-    bool reg_dest = false; 
-    // Need to add the w field to check the word size (Assuming its always full for now)
+        instruction decoded = decodeInstruction(buffer, i);
 
-    std::unordered_map<unsigned char, std::string> reg_opcode =
-    {
-        {0b100010, "mov"}, 
-
-    }; 
-
-    std::unordered_map<unsigned char, std::string> reg_map = 
-    {
-        {0b0000, "al"},
-        {0b0001, "ax"},
-        {0b0010, "cl"},
-        {0b0011, "cx"},
-        {0b0100, "dl"},
-        {0b0101, "dx"},
-        {0b0110, "bl"},
-        {0b0111, "bx"},
-        {0b1000, "ah"},
-        {0b1001, "sp"},
-        {0b1010, "ch"},
-        {0b1011, "bp"},
-        {0b1100, "dh"},
-        {0b1101, "si"},
-        {0b1110, "bh"},
-        {0b1111, "di"},
-    }; 
-
-    // In the future if you need to add other stuff just make a struct
-    // Also add more stuff to the map
-    
-    for(int i = 0; i < all_instructions.size(); ++i)
-    {
-
-        if(all_instructions[i].direction == 1)
+        switch(decoded.mod)
         {
-            reg_dest = true; 
+            case 0b00: 
+                if(decoded.rm == 0b110)
+                    disp = 2;  
+                else
+                    disp = 0; 
+                break; 
+            case 0b01: 
+                disp = 1; 
+                break; 
+            case 0b10: 
+                disp = 2; 
+                break; 
+            default: 
+                disp = 0; 
         }
 
-        std::cout << reg_opcode[all_instructions[i].opcode] << " "; 
-
-        if(all_instructions[i].mod == 11)
+        if(decoded.opcode == 0b1011 && decoded.wordSize) // check debugger 
         {
-        
+            data = 1;
+            disp = 0; 
+        } 
+        else if (decoded.opcode == 0b110001)
+        {
+            data = 1; 
+            if(decoded.wordSize)
+                ++data; 
         }
 
-        all_instructions[i].rm = (all_instructions[i].wordSize == 0 ? ((all_instructions[i].rm << 1) | 0) : ((all_instructions[i].rm << 1) | 1)); 
-        all_instructions[i].reg = (all_instructions[i].wordSize == 0 ? ((all_instructions[i].reg << 1) | 0) : ((all_instructions[i].reg << 1) | 1)); 
-        std::cout << " " << reg_map[all_instructions[i].rm]; 
-        std::cout << ", " << reg_map[all_instructions[i].reg]; 
-        std::cout << '\n'; 
+        if(disp || data)
+            decodeAdditional(buffer, decoded, i+2, disp, data); // i+2? because i isnt updated
+
+        i += disp + data; 
+
+        ins.push_back(decoded);
     }
+
+    return ins; 
+}
+
+void print_instructions(std::vector<instruction> ins)
+{
+    for(instruction tmp : ins)
+    {
+        if(tmp.lowData)
+        {
+            std::cout << reg_opcode[tmp.opcode] << ' '; 
+            tmp.reg = (tmp.wordSize == 0 ? ((tmp.reg << 1) | 0) : ((tmp.reg << 1) | 1)); 
+            std::cout << reg_map[tmp.reg] << ' ';
+            std::cout << (int)((static_cast<int>(tmp.highData) << 8) | tmp.lowData) << ' ';
+            std::cout << '\n';
+        }
+        else
+        {
+            std::cout << reg_opcode[tmp.opcode] << ' '; 
+            tmp.rm = (tmp.wordSize == 0 ? ((tmp.rm << 1) | 0) : ((tmp.rm << 1) | 1)); 
+            tmp.reg = (tmp.wordSize == 0 ? ((tmp.reg << 1) | 0) : ((tmp.reg << 1) | 1)); 
+            std::cout << reg_map[tmp.rm] << ' ';
+            std::cout << reg_map[tmp.reg] << ' ';
+            std::cout << '\n';
+        }
+    }
+}
+
+int main()
+{
+    std::vector<unsigned char> buffer = getFile("manymov.bin"); 
+    std::vector<instruction> all_instructions = getInstructions(buffer);
+    print_instructions(all_instructions);
 
 	return 0; 
 }
