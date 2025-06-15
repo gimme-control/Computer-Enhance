@@ -234,10 +234,22 @@ void print_instructions(std::vector<instruction> ins)
         if(((tmp.mod == 0 && tmp.rm != 6) || tmp.mod == 1 || tmp.mod == 2) && tmp.opcode != 0b1011)
         {
             tmp.reg = (tmp.wordSize == 0 ? ((tmp.reg << 1) | 0) : ((tmp.reg << 1) | 1)); 
+            int data = (int)((static_cast<int>(tmp.highData) << 8) | tmp.lowData);
+
+            if(tmp.lowData)
+            {
+                if(tmp.wordSize)
+                    std::cout << "word" << ' ';
+                else
+                    std::cout << "byte" << ' ';
+            }
 
             if(tmp.direction)
             {
-                std::cout << reg_map[tmp.reg] << ", ";
+                if(tmp.lowData)
+                    std::cout << data << ", ";
+                else
+                    std::cout << reg_map[tmp.reg] << ", ";
             }
 
 
@@ -282,7 +294,10 @@ void print_instructions(std::vector<instruction> ins)
 
             if(!tmp.direction)
             {
-                std::cout << ", " << reg_map[tmp.reg];
+                if(tmp.lowData)
+                    std::cout << ", " << data;
+                else
+                    std::cout << ", " << reg_map[tmp.reg]; 
             }
         }
         else if(tmp.lowData)
